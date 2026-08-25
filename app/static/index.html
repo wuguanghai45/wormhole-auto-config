@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n="title">Wormhole 自动配置</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <div class="header-top">
+        <h1 data-i18n="appName">Wormhole 自动配置</h1>
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" class="lang-btn" data-locale="zh-CN">中文</button>
+          <button type="button" class="lang-btn" data-locale="en">EN</button>
+        </div>
+      </div>
+      <p class="subtitle" data-i18n="subtitle">配置 WiFi 与 MQTT 桥接，并通过局域网自动下发</p>
+    </header>
+
+    <section class="panel">
+      <h2 data-i18n="configTitle">配置</h2>
+      <form id="config-form" class="form">
+        <input type="hidden" id="locale" name="locale" value="zh-CN" />
+        <label>
+          <span data-i18n="ssid">WiFi SSID</span>
+          <input id="ssid" name="ssid" type="text" required autocomplete="off" />
+        </label>
+        <label>
+          <span data-i18n="password">WiFi 密码</span>
+          <input id="password" name="password" type="password" autocomplete="off" />
+        </label>
+        <label class="checkbox">
+          <input id="bridge_mode" name="bridge_mode" type="checkbox" checked />
+          <span data-i18n="bridgeMode">启用 MQTT 桥接模式（proxy）</span>
+        </label>
+
+        <details class="advanced">
+          <summary data-i18n="advanced">高级选项</summary>
+          <label>
+            <span data-i18n="routerIp">路由器 IP</span>
+            <input id="router_ip" name="router_ip" type="text" value="192.168.40.1" />
+          </label>
+          <label>
+            <span data-i18n="lanInterface">LAN 网口（可选）</span>
+            <input id="lan_interface" name="lan_interface" type="text" data-i18n-placeholder="lanInterfacePlaceholder" placeholder="例如 en0 / eth0" />
+          </label>
+          <label>
+            <span data-i18n="lanWaitTimeout">LAN 等待超时（秒）</span>
+            <input id="lan_wait_timeout_sec" name="lan_wait_timeout_sec" type="number" min="10" />
+          </label>
+          <label>
+            <span data-i18n="wifiVerifyTimeout">WiFi 验证超时（秒）</span>
+            <input id="wifi_verify_timeout_sec" name="wifi_verify_timeout_sec" type="number" min="10" />
+          </label>
+          <label>
+            <span data-i18n="pollInterval">轮询间隔（秒）</span>
+            <input id="poll_interval_sec" name="poll_interval_sec" type="number" min="0.5" step="0.5" />
+          </label>
+        </details>
+
+        <div class="actions">
+          <button type="button" id="save-btn" class="btn secondary" data-i18n="saveConfig">保存配置</button>
+          <button type="button" id="start-btn" class="btn primary" data-i18n="startJob">启动自动配置</button>
+          <button type="button" id="stop-btn" class="btn danger" data-i18n="stopJob" disabled>停止</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2 data-i18n="statusTitle">状态</h2>
+      <div id="success-banner" class="banner success hidden" role="status"></div>
+      <div id="error-banner" class="banner error hidden" role="alert"></div>
+      <dl class="status-grid">
+        <div>
+          <dt data-i18n="phase">阶段</dt>
+          <dd id="phase">idle</dd>
+        </div>
+        <div>
+          <dt data-i18n="message">消息</dt>
+          <dd id="message" data-i18n="idle">空闲</dd>
+        </div>
+        <div>
+          <dt data-i18n="lan">LAN</dt>
+          <dd id="lan">—</dd>
+        </div>
+        <div>
+          <dt data-i18n="wifiIps">WiFi IP</dt>
+          <dd id="wifi-ips">—</dd>
+        </div>
+      </dl>
+      <h3 data-i18n="log">日志</h3>
+      <pre id="log" class="log" aria-live="polite"></pre>
+    </section>
+  </main>
+  <script src="/static/i18n.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
