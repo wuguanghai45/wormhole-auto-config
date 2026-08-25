@@ -211,6 +211,7 @@ class AutoConfigService:
         client: DeviceCgiClient,
         config: AppConfig,
     ) -> None:
+        """Always save MQTT via legacy CGI, applying the selected bridge mode."""
         desired_mode = "proxy" if config.bridge_mode else "direct"
         self._set_phase(
             JobPhase.APPLYING_BRIDGE,
@@ -219,21 +220,24 @@ class AutoConfigService:
         )
         services = await client.get_services_info()
         mqtt = services.get("mqtt") or {}
-        current_mode = str(mqtt.get("connection_mode") or "proxy")
-        links = mqtt.get("links") or []
-        if not isinstance(links, list) or not links:
-            raise DeviceCgiError(self._msg("error.no_mqtt_links"))
 
-        if current_mode == desired_mode:
-            self._log("job.mqtt_unchanged", mode=desired_mode)
-            return
+        host = str(mqtt.get("hostname") or "").strip()
+        port = str(mqtt.get("port") or "").strip()
+        if not host or not port:
+            raise DeviceCgiError(self._msg("error.no_mqtt_broker"))
 
         self._set_phase(
             JobPhase.APPLYING_BRIDGE,
             "job.setting_mqtt",
             mode=desired_mode,
         )
-        await client.save_mqtt(desired_mode, links)
+        await client.save_mqtt(
+            host=host,
+            port=port,
+            username=str(mqtt.get("username") or ""),
+            password=str(mqtt.get("password") or ""),
+            connection_mode=desired_mode,
+        )
         self._log("job.mqtt_set", mode=desired_mode)
 
     async def _verify_wifi(self, client: DeviceCgiClient, config: AppConfig) -> None:

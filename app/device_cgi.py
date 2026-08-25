@@ -79,7 +79,7 @@ class DeviceCgiClient:
         return data
 
     async def get_services_info(self) -> dict[str, Any]:
-        """GET /cgi-bin/get-services-info including MQTT links."""
+        """GET /cgi-bin/get-services-info (legacy mqtt.hostname/port fields)."""
         data = await self._get_json("/cgi-bin/get-services-info")
         if data.get("status") != "success":
             raise DeviceCgiError(data.get("message") or "get-services-info failed")
@@ -87,18 +87,33 @@ class DeviceCgiClient:
 
     async def save_mqtt(
         self,
-        connection_mode: str,
-        links: list[dict[str, Any]],
+        *,
+        host: str,
+        port: str | int,
+        username: str = "",
+        password: str = "",
+        connection_mode: str = "proxy",
     ) -> dict[str, Any]:
-        """POST /cgi-bin/save-mqtt-config with connection_mode and links."""
+        """POST /cgi-bin/save-mqtt-config using the production shell CGI contract.
+
+        Body fields are all JSON strings because the device CGI parses them with
+        sed patterns like `"port":"..."`.
+        """
         if connection_mode not in ("proxy", "direct"):
             raise DeviceCgiError(f"Invalid connection_mode: {connection_mode}")
-        if not links:
-            raise DeviceCgiError("At least one MQTT link is required")
-        data = await self._post_json(
-            "/cgi-bin/save-mqtt-config",
-            {"connection_mode": connection_mode, "links": links},
-        )
+        host_value = str(host or "").strip()
+        port_value = str(port or "").strip()
+        if not host_value or not port_value:
+            raise DeviceCgiError("MQTT host and port are required")
+
+        payload = {
+            "host": host_value,
+            "port": port_value,
+            "username": "" if username is None else str(username),
+            "password": "" if password is None else str(password),
+            "connection_mode": connection_mode,
+        }
+        data = await self._post_json("/cgi-bin/save-mqtt-config", payload)
         if data.get("status") != "success":
             raise DeviceCgiError(data.get("message") or "save-mqtt-config failed")
         return data
