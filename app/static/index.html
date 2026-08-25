@@ -31,6 +31,24 @@
           <span data-i18n="password">WiFi 密码</span>
           <input id="password" name="password" type="password" autocomplete="off" />
         </label>
+
+        <h3 class="section-title" data-i18n="mqttTitle">MQTT</h3>
+        <label>
+          <span data-i18n="mqttHost">MQTT 主机</span>
+          <input id="mqtt_host" name="mqtt_host" type="text" required autocomplete="off" />
+        </label>
+        <label>
+          <span data-i18n="mqttPort">MQTT 端口</span>
+          <input id="mqtt_port" name="mqtt_port" type="text" value="1883" required autocomplete="off" />
+        </label>
+        <label>
+          <span data-i18n="mqttUsername">MQTT 用户名</span>
+          <input id="mqtt_username" name="mqtt_username" type="text" autocomplete="off" />
+        </label>
+        <label>
+          <span data-i18n="mqttPassword">MQTT 密码</span>
+          <input id="mqtt_password" name="mqtt_password" type="password" autocomplete="off" />
+        </label>
         <label class="checkbox">
           <input id="bridge_mode" name="bridge_mode" type="checkbox" checked />
           <span data-i18n="bridgeMode">启用 MQTT 桥接模式（proxy）</span>

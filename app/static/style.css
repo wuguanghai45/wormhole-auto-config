@@ -106,6 +106,14 @@ body {
   font-weight: 600;
 }
 
+.section-title {
+  margin: 0.35rem 0 0 !important;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.95rem !important;
+  color: var(--text) !important;
+}
+
 .form {
   display: grid;
   gap: 0.9rem;

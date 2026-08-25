@@ -14,6 +14,10 @@ const ACTIVE_PHASES = new Set([
 const fields = [
   "ssid",
   "password",
+  "mqtt_host",
+  "mqtt_port",
+  "mqtt_username",
+  "mqtt_password",
   "router_ip",
   "lan_interface",
   "lan_wait_timeout_sec",

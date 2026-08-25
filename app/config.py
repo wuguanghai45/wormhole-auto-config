@@ -26,6 +26,10 @@ class AppConfig(BaseModel):
 
     ssid: str = ""
     password: str = ""
+    mqtt_host: str = ""
+    mqtt_port: str = "1883"
+    mqtt_username: str = ""
+    mqtt_password: str = ""
     bridge_mode: bool = True
     locale: str = DEFAULT_LOCALE
     router_ip: str = DEFAULT_ROUTER_IP
@@ -40,6 +44,14 @@ class AppConfig(BaseModel):
     def _normalize_locale(cls, value: str) -> str:
         """Normalize persisted locale to a supported catalog key."""
         return normalize_locale(value)
+
+    @field_validator("mqtt_port", mode="before")
+    @classmethod
+    def _coerce_mqtt_port(cls, value: Any) -> str:
+        """Store MQTT port as a string for the legacy CGI contract."""
+        if value is None:
+            return "1883"
+        return str(value).strip() or "1883"
 
 
 def ensure_data_dir() -> None:

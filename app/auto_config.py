@@ -91,6 +91,8 @@ class AutoConfigService:
             self._locale = locale
             if not cfg.ssid.strip():
                 raise ValueError(t(self._locale, "job.ssid_required"))
+            if not cfg.mqtt_host.strip() or not str(cfg.mqtt_port).strip():
+                raise ValueError(t(self._locale, "job.mqtt_required"))
             self._cancel_requested = False
             bridge_label = self._msg(
                 "job.bridge_on" if cfg.bridge_mode else "job.bridge_off"
@@ -103,7 +105,12 @@ class AutoConfigService:
                 updated_at=utc_now(),
             )
             self._state.append_log(
-                self._msg("job.started", router=cfg.router_ip, bridge=bridge_label)
+                self._msg(
+                    "job.started",
+                    router=cfg.router_ip,
+                    bridge=bridge_label,
+                    mqtt=cfg.mqtt_host.strip(),
+                )
             )
             self._publish()
             self._task = asyncio.create_task(self._run(cfg), name="auto-config-job")
@@ -259,18 +266,10 @@ class AutoConfigService:
         client: DeviceCgiClient,
         config: AppConfig,
     ) -> None:
-        """Always save MQTT via legacy CGI, applying the selected bridge mode."""
+        """Save MQTT via legacy CGI using operator-provided broker settings."""
         desired_mode = "proxy" if config.bridge_mode else "direct"
-        self._set_phase(
-            JobPhase.APPLYING_BRIDGE,
-            "job.reading_mqtt",
-            mode=desired_mode,
-        )
-        services = await client.get_services_info()
-        mqtt = services.get("mqtt") or {}
-
-        host = str(mqtt.get("hostname") or "").strip()
-        port = str(mqtt.get("port") or "").strip()
+        host = config.mqtt_host.strip()
+        port = str(config.mqtt_port).strip()
         if not host or not port:
             raise DeviceCgiError(self._msg("error.no_mqtt_broker"))
 
@@ -278,15 +277,17 @@ class AutoConfigService:
             JobPhase.APPLYING_BRIDGE,
             "job.setting_mqtt",
             mode=desired_mode,
+            host=host,
+            port=port,
         )
         await client.save_mqtt(
             host=host,
             port=port,
-            username=str(mqtt.get("username") or ""),
-            password=str(mqtt.get("password") or ""),
+            username=config.mqtt_username,
+            password=config.mqtt_password,
             connection_mode=desired_mode,
         )
-        self._log("job.mqtt_set", mode=desired_mode)
+        self._log("job.mqtt_set", mode=desired_mode, host=host, port=port)
 
     async def _verify_wifi(self, client: DeviceCgiClient, config: AppConfig) -> None:
         self._set_phase(JobPhase.VERIFYING_WIFI, "job.verifying_wifi")
