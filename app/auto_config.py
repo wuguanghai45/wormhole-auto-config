@@ -135,7 +135,7 @@ class AutoConfigService:
             raise asyncio.CancelledError()
 
     async def _run(self, config: AppConfig) -> None:
-        """Run configure attempts; on failure wait for LAN reconnect and retry."""
+        """Keep configuring devices until cancelled: success or failure both await reconnect."""
         attempt = 0
         try:
             while True:
@@ -151,7 +151,10 @@ class AutoConfigService:
                     await self._wait_for_lan(config)
                     self._check_cancel()
                     await self._configure_device(config)
-                    return
+                    await self._wait_for_lan_disconnect(
+                        config,
+                        message_key="job.waiting_next_device",
+                    )
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:  # noqa: BLE001 - retry after LAN reconnect
@@ -163,7 +166,10 @@ class AutoConfigService:
                     self._state.updated_at = utc_now()
                     self._state.append_log(self._state.message)
                     self._publish()
-                    await self._wait_for_lan_disconnect(config)
+                    await self._wait_for_lan_disconnect(
+                        config,
+                        message_key="job.waiting_disconnect",
+                    )
         except asyncio.CancelledError:
             self._state.phase = JobPhase.CANCELLED
             self._state.message = self._msg("job.cancelled_message")
@@ -194,9 +200,14 @@ class AutoConfigService:
         client = DeviceCgiClient(config.router_ip, config.http_timeout_sec)
         return await client.probe_reachable()
 
-    async def _wait_for_lan_disconnect(self, config: AppConfig) -> None:
-        """Wait until LAN/router is no longer reachable after a failed attempt."""
-        self._set_phase(JobPhase.WAITING_RECONNECT, "job.waiting_disconnect")
+    async def _wait_for_lan_disconnect(
+        self,
+        config: AppConfig,
+        *,
+        message_key: str,
+    ) -> None:
+        """Wait until LAN/router is no longer reachable before the next attempt."""
+        self._set_phase(JobPhase.WAITING_RECONNECT, message_key)
         while True:
             self._check_cancel()
             if not await self._router_reachable(config):

@@ -113,7 +113,7 @@ function renderState(state) {
   success.classList.add("hidden");
   error.classList.add("hidden");
 
-  if (phase === "success") {
+  if (phase === "success" || (phase === "waiting_reconnect" && !state.error && (state.wifi_ip0 || state.wifi_ip1))) {
     success.textContent = state.message || window.I18n.t("wifiSuccessFallback");
     success.classList.remove("hidden");
   } else if (phase === "failed" || (phase === "waiting_reconnect" && state.error)) {
