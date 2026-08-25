@@ -135,21 +135,35 @@ class AutoConfigService:
             raise asyncio.CancelledError()
 
     async def _run(self, config: AppConfig) -> None:
+        """Run configure attempts; on failure wait for LAN reconnect and retry."""
+        attempt = 0
         try:
-            await self._wait_for_lan(config)
-            self._check_cancel()
+            while True:
+                attempt += 1
+                if attempt > 1:
+                    self._state.error = None
+                    self._state.wifi_ip0 = None
+                    self._state.wifi_ip1 = None
+                    self._state.finished_at = None
+                    self._log("job.retry_after_reconnect", attempt=attempt)
 
-            client = DeviceCgiClient(config.router_ip, config.http_timeout_sec)
-
-            self._set_phase(JobPhase.APPLYING_WIFI, "job.applying_wifi")
-            await client.save_wifi(config.ssid.strip(), config.password)
-            self._log("job.wifi_saved")
-            self._check_cancel()
-
-            await self._apply_bridge_if_needed(client, config)
-            self._check_cancel()
-
-            await self._verify_wifi(client, config)
+                try:
+                    await self._wait_for_lan(config)
+                    self._check_cancel()
+                    await self._configure_device(config)
+                    return
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # noqa: BLE001 - retry after LAN reconnect
+                    error_text = str(exc)
+                    self._state.phase = JobPhase.FAILED
+                    self._state.message = self._msg("job.failed", error=error_text)
+                    self._state.error = error_text
+                    self._state.finished_at = utc_now()
+                    self._state.updated_at = utc_now()
+                    self._state.append_log(self._state.message)
+                    self._publish()
+                    await self._wait_for_lan_disconnect(config)
         except asyncio.CancelledError:
             self._state.phase = JobPhase.CANCELLED
             self._state.message = self._msg("job.cancelled_message")
@@ -157,15 +171,38 @@ class AutoConfigService:
             self._state.updated_at = utc_now()
             self._state.append_log(self._msg("job.cancelled"))
             self._publish()
-        except Exception as exc:  # noqa: BLE001 - surface any job failure to UI
-            error_text = str(exc)
-            self._state.phase = JobPhase.FAILED
-            self._state.message = self._msg("job.failed", error=error_text)
-            self._state.error = error_text
-            self._state.finished_at = utc_now()
-            self._state.updated_at = utc_now()
-            self._state.append_log(self._state.message)
-            self._publish()
+
+    async def _configure_device(self, config: AppConfig) -> None:
+        """Apply WiFi + MQTT and verify STA connectivity once."""
+        client = DeviceCgiClient(config.router_ip, config.http_timeout_sec)
+
+        self._set_phase(JobPhase.APPLYING_WIFI, "job.applying_wifi")
+        await client.save_wifi(config.ssid.strip(), config.password)
+        self._log("job.wifi_saved")
+        self._check_cancel()
+
+        await self._apply_mqtt(client, config)
+        self._check_cancel()
+
+        await self._verify_wifi(client, config)
+
+    async def _router_reachable(self, config: AppConfig) -> bool:
+        """Return True when the preferred LAN has IP and the router CGI responds."""
+        lan = find_lan_address(config.lan_interface)
+        if lan is None:
+            return False
+        client = DeviceCgiClient(config.router_ip, config.http_timeout_sec)
+        return await client.probe_reachable()
+
+    async def _wait_for_lan_disconnect(self, config: AppConfig) -> None:
+        """Wait until LAN/router is no longer reachable after a failed attempt."""
+        self._set_phase(JobPhase.WAITING_RECONNECT, "job.waiting_disconnect")
+        while True:
+            self._check_cancel()
+            if not await self._router_reachable(config):
+                self._log("job.lan_disconnected")
+                return
+            await asyncio.sleep(config.poll_interval_sec)
 
     async def _wait_for_lan(self, config: AppConfig) -> None:
         self._set_phase(JobPhase.WAITING_LAN, "job.waiting_lan")
@@ -206,7 +243,7 @@ class AutoConfigService:
                 )
             await asyncio.sleep(config.poll_interval_sec)
 
-    async def _apply_bridge_if_needed(
+    async def _apply_mqtt(
         self,
         client: DeviceCgiClient,
         config: AppConfig,

@@ -17,6 +17,7 @@ class JobPhase(str, Enum):
 
     IDLE = "idle"
     WAITING_LAN = "waiting_lan"
+    WAITING_RECONNECT = "waiting_reconnect"
     APPLYING_WIFI = "applying_wifi"
     APPLYING_BRIDGE = "applying_bridge"
     VERIFYING_WIFI = "verifying_wifi"

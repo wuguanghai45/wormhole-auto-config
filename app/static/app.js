@@ -5,6 +5,7 @@
 
 const ACTIVE_PHASES = new Set([
   "waiting_lan",
+  "waiting_reconnect",
   "applying_wifi",
   "applying_bridge",
   "verifying_wifi",
@@ -115,7 +116,7 @@ function renderState(state) {
   if (phase === "success") {
     success.textContent = state.message || window.I18n.t("wifiSuccessFallback");
     success.classList.remove("hidden");
-  } else if (phase === "failed") {
+  } else if (phase === "failed" || (phase === "waiting_reconnect" && state.error)) {
     error.textContent =
       state.error || state.message || window.I18n.t("jobFailedFallback");
     error.classList.remove("hidden");
