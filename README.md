@@ -15,20 +15,61 @@ Local operator tool that waits for a LAN link to the Wormhole device, then confi
 - Host machine Ethernet-connected to the device LAN
 - Device reachable at `192.168.40.1` (configurable)
 
-## Setup
+## Setup (recommended)
+
+One-shot install: create venv, install deps, and enable **login/boot autostart**.
+
+```bash
+cd wormhole-auto-config
+chmod +x scripts/*.sh
+./scripts/install.sh
+```
+
+Then open [http://localhost:8080](http://localhost:8080).
+
+| Platform | Autostart mechanism |
+|----------|---------------------|
+| macOS | LaunchAgent `~/Library/LaunchAgents/com.wormhole.auto-config.plist` |
+| Linux | systemd user unit `~/.config/systemd/user/wormhole-auto-config.service` |
+
+Optional environment overrides when installing:
+
+```bash
+HOST=0.0.0.0 PORT=8080 ./scripts/install.sh
+```
+
+Uninstall autostart (keeps project files):
+
+```bash
+./scripts/uninstall.sh
+```
+
+Foreground run without touching autostart:
+
+```bash
+./scripts/run.sh
+```
+
+Service logs: `logs/service.out.log`, `logs/service.err.log`.
+
+### Manual setup
 
 ```bash
 cd wormhole-auto-config
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
 ## Run
 
+After `./scripts/install.sh`, the service starts automatically on login.
+
+Manual foreground:
+
 ```bash
-source .venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8080
+./scripts/run.sh
 ```
 
 Open [http://localhost:8080](http://localhost:8080).
