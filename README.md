@@ -1,12 +1,13 @@
 # Wormhole Auto-Config Service
 
-Local operator tool that waits for a LAN link to the Wormhole device, then configures WiFi (and optional MQTT bridge mode) via device CGI, and verifies STA connectivity.
+Local operator tool that waits for a LAN link to the Wormhole device, clears stale WiFi sections over SSH, then configures WiFi (and optional MQTT bridge mode) via device CGI and verifies STA connectivity.
 
 ## Features
 
 - Web UI to set WiFi SSID / password and MQTT bridge mode (`proxy` / `direct`)
 - One-click auto-config job with live progress (SSE)
 - Monitors host LAN for IPv4, then talks to `http://192.168.40.1` CGI endpoints
+- Before each WiFi update, uses SSH to delete `wireless.wifinet0`, `wireless.wifinet1`, and `wireless.wifinet2`
 - Verifies success when `get-network-status` reports `wifi.ip0` or `wifi.ip1`
 
 ## Requirements
@@ -14,6 +15,7 @@ Local operator tool that waits for a LAN link to the Wormhole device, then confi
 - Python 3.10+
 - Host machine Ethernet-connected to the device LAN
 - Device reachable at `192.168.40.1` (configurable)
+- SSH key authentication for the device (defaults: `root`, port `22`); configure the matching key in the local OpenSSH agent or configuration
 
 ## Setup (recommended)
 
@@ -93,6 +95,15 @@ Open [http://localhost:8080](http://localhost:8080).
 - `POST /cgi-bin/save-mqtt-config` — rewrite links with desired `connection_mode`
 - `GET /cgi-bin/get-network-status` — WiFi STA IP check
 
+Before `save-wifi-config`, the service runs the following on the same device IP over SSH:
+
+```sh
+uci -q delete wireless.wifinet0
+uci -q delete wireless.wifinet1
+uci -q delete wireless.wifinet2
+uci commit wireless
+```
+
 ## i18n
 
 - UI and job progress messages support **zh-CN** (default) and **en**.
@@ -103,4 +114,4 @@ Open [http://localhost:8080](http://localhost:8080).
 
 - Settings are stored in `data/config.json`.
 - Bridge mode maps to MQTT `connection_mode=proxy` (on) or `direct` (off).
-- No SSH is used; the service calls CGI over HTTP on the LAN.
+- SSH is non-interactive and uses the host's existing OpenSSH keys/configuration. Host-key fingerprint verification and `known_hosts` updates are disabled so new or reflashed robots do not block automatic configuration.

@@ -61,6 +61,18 @@
             <input id="router_ip" name="router_ip" type="text" value="192.168.40.1" />
           </label>
           <label>
+            <span data-i18n="sshUsername">SSH 用户</span>
+            <input id="ssh_username" name="ssh_username" type="text" value="root" autocomplete="off" />
+          </label>
+          <label>
+            <span data-i18n="sshPort">SSH 端口</span>
+            <input id="ssh_port" name="ssh_port" type="number" min="1" max="65535" value="22" />
+          </label>
+          <label>
+            <span data-i18n="sshTimeout">SSH 超时（秒）</span>
+            <input id="ssh_timeout_sec" name="ssh_timeout_sec" type="number" min="1" step="1" value="10" />
+          </label>
+          <label>
             <span data-i18n="lanInterface">LAN 网口（可选）</span>
             <input id="lan_interface" name="lan_interface" type="text" data-i18n-placeholder="lanInterfacePlaceholder" placeholder="例如 en0 / eth0" />
           </label>

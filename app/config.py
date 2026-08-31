@@ -19,6 +19,9 @@ DEFAULT_LAN_WAIT_TIMEOUT_SEC = 300
 DEFAULT_WIFI_VERIFY_TIMEOUT_SEC = 120
 DEFAULT_POLL_INTERVAL_SEC = 2.0
 DEFAULT_HTTP_TIMEOUT_SEC = 10.0
+DEFAULT_SSH_USERNAME = "root"
+DEFAULT_SSH_PORT = 22
+DEFAULT_SSH_TIMEOUT_SEC = 10.0
 
 
 class AppConfig(BaseModel):
@@ -33,6 +36,9 @@ class AppConfig(BaseModel):
     bridge_mode: bool = True
     locale: str = DEFAULT_LOCALE
     router_ip: str = DEFAULT_ROUTER_IP
+    ssh_username: str = DEFAULT_SSH_USERNAME
+    ssh_port: int = Field(default=DEFAULT_SSH_PORT, ge=1, le=65535)
+    ssh_timeout_sec: float = Field(default=DEFAULT_SSH_TIMEOUT_SEC, ge=1.0)
     lan_interface: str = ""
     lan_wait_timeout_sec: int = Field(default=DEFAULT_LAN_WAIT_TIMEOUT_SEC, ge=10)
     wifi_verify_timeout_sec: int = Field(default=DEFAULT_WIFI_VERIFY_TIMEOUT_SEC, ge=10)

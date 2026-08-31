@@ -9,6 +9,7 @@ from typing import Any, AsyncIterator, Optional
 
 from app.config import AppConfig, load_config
 from app.device_cgi import DeviceCgiClient, DeviceCgiError
+from app.device_ssh import DeviceSshClient
 from app.i18n import normalize_locale, t
 from app.lan_monitor import find_lan_address, format_lan_snapshot
 from app.models import JobPhase, JobState, utc_now
@@ -186,10 +187,21 @@ class AutoConfigService:
             self._publish()
 
     async def _configure_device(self, config: AppConfig) -> None:
-        """Apply WiFi + MQTT and verify STA connectivity once."""
+        """Clear stale WiFi sections, then apply WiFi, MQTT, and verify connectivity."""
         client = DeviceCgiClient(config.router_ip, config.http_timeout_sec)
+        ssh_client = DeviceSshClient(
+            config.router_ip,
+            username=config.ssh_username.strip() or "root",
+            port=config.ssh_port,
+            timeout_sec=config.ssh_timeout_sec,
+        )
 
         self._set_phase(JobPhase.APPLYING_WIFI, "job.applying_wifi")
+        self._log("job.clearing_wifi")
+        await ssh_client.clear_stale_wifi_networks()
+        self._log("job.wifi_cleared")
+        self._check_cancel()
+
         await client.save_wifi(config.ssid.strip(), config.password)
         self._log("job.wifi_saved")
         self._check_cancel()
