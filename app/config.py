@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -10,9 +12,35 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.i18n import DEFAULT_LOCALE, normalize_locale
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT_DIR / "data"
+APP_DIR_NAME = "wormhole-auto-config"
+
+
+def _xdg_home(env_key: str, default_relative: Path) -> Path:
+    """Resolve an XDG base directory, expanding a tilde-free absolute path."""
+    override = os.environ.get(env_key, "").strip()
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / default_relative
+
+
+def user_data_dir() -> Path:
+    """Return the XDG data directory for persisted application config."""
+    return _xdg_home("XDG_DATA_HOME", Path(".local/share")) / APP_DIR_NAME
+
+
+def user_state_dir() -> Path:
+    """Return the XDG state directory for runtime state and logs."""
+    return _xdg_home("XDG_STATE_HOME", Path(".local/state")) / APP_DIR_NAME
+
+
+DATA_DIR = user_data_dir()
+STATE_DIR = user_state_dir()
+LOG_DIR = STATE_DIR / "logs"
 CONFIG_PATH = DATA_DIR / "config.json"
+
+# Legacy checkout path used for one-time config migration.
+_LEGACY_ROOT = Path(__file__).resolve().parent.parent
+_LEGACY_CONFIG_PATH = _LEGACY_ROOT / "data" / "config.json"
 
 DEFAULT_ROUTER_IP = "192.168.40.1"
 DEFAULT_LAN_WAIT_TIMEOUT_SEC = 300
@@ -65,9 +93,27 @@ def ensure_data_dir() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def ensure_state_dirs() -> None:
+    """Create the state and log directories if they do not exist."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _migrate_legacy_config() -> None:
+    """Copy checkout data/config.json into the XDG path once if needed."""
+    if CONFIG_PATH.exists() or not _LEGACY_CONFIG_PATH.is_file():
+        return
+    ensure_data_dir()
+    try:
+        shutil.copy2(_LEGACY_CONFIG_PATH, CONFIG_PATH)
+    except OSError:
+        return
+
+
 def load_config() -> AppConfig:
     """Load persisted config from disk, or return defaults."""
     ensure_data_dir()
+    _migrate_legacy_config()
     if not CONFIG_PATH.exists():
         return AppConfig()
     try:

@@ -8,10 +8,13 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8080}"
 
-cd "${ROOT_DIR}"
-if [[ ! -x "${ROOT_DIR}/.venv/bin/uvicorn" ]]; then
-  echo "Virtualenv missing. Run: ${SCRIPT_DIR}/install.sh" >&2
-  exit 1
+if [[ -x "${ROOT_DIR}/.venv/bin/wormhole-auto-config" ]]; then
+  exec "${ROOT_DIR}/.venv/bin/wormhole-auto-config" serve --host "${HOST}" --port "${PORT}"
 fi
 
-exec "${ROOT_DIR}/.venv/bin/uvicorn" app.main:app --host "${HOST}" --port "${PORT}"
+if command -v wormhole-auto-config >/dev/null 2>&1; then
+  exec wormhole-auto-config serve --host "${HOST}" --port "${PORT}"
+fi
+
+printf '[run] ERROR: wormhole-auto-config not found. Run: %s/install.sh\n' "${SCRIPT_DIR}" >&2
+exit 1

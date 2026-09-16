@@ -19,10 +19,19 @@ Local operator tool that waits for a LAN link to the Wormhole device, clears sta
 
 ## Setup (recommended)
 
-One-shot install: create venv, install deps, and enable **login/boot autostart**.
+Install the wheel into a venv, then register **login/boot autostart**:
 
 ```bash
 cd wormhole-auto-config
+python3 -m venv .venv
+source .venv/bin/activate
+pip install .
+wormhole-auto-config install
+```
+
+Or use the one-shot script (creates `.venv`, editable install, then `install`):
+
+```bash
 chmod +x scripts/*.sh
 ./scripts/install.sh
 ```
@@ -34,25 +43,37 @@ Then open [http://localhost:8080](http://localhost:8080).
 | macOS | LaunchAgent `~/Library/LaunchAgents/com.wormhole.auto-config.plist` |
 | Linux | systemd user unit `~/.config/systemd/user/wormhole-auto-config.service` |
 
-Optional environment overrides when installing:
+Optional environment / flag overrides:
 
 ```bash
 HOST=0.0.0.0 PORT=8080 ./scripts/install.sh
+# or
+wormhole-auto-config install --host 0.0.0.0 --port 8080
 ```
 
-Uninstall autostart (keeps project files):
+Uninstall autostart (keeps config and logs):
 
 ```bash
+wormhole-auto-config uninstall
+# or
 ./scripts/uninstall.sh
 ```
 
 Foreground run without touching autostart:
 
 ```bash
+wormhole-auto-config serve
+# or
 ./scripts/run.sh
 ```
 
-Service logs: `logs/service.out.log`, `logs/service.err.log`.
+### Build a wheel
+
+```bash
+pip install build
+python -m build
+# artifacts under dist/*.whl
+```
 
 ### Manual setup
 
@@ -60,21 +81,30 @@ Service logs: `logs/service.out.log`, `logs/service.err.log`.
 cd wormhole-auto-config
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8080
+pip install .
+wormhole-auto-config serve --host 0.0.0.0 --port 8080
 ```
 
 ## Run
 
-After `./scripts/install.sh`, the service starts automatically on login.
+After `wormhole-auto-config install` (or `./scripts/install.sh`), the service starts automatically on login.
 
 Manual foreground:
 
 ```bash
-./scripts/run.sh
+wormhole-auto-config serve
 ```
 
 Open [http://localhost:8080](http://localhost:8080).
+
+## Data locations
+
+| Kind | Path |
+|------|------|
+| Config | `~/.local/share/wormhole-auto-config/config.json` (`$XDG_DATA_HOME` if set) |
+| Logs | `~/.local/state/wormhole-auto-config/logs/` (`$XDG_STATE_HOME` if set) |
+
+A one-time migration copies an old checkout `data/config.json` into the XDG path when present.
 
 ## API
 
@@ -108,10 +138,10 @@ uci commit wireless
 
 - UI and job progress messages support **zh-CN** (default) and **en**.
 - Switch language with the **中文 / EN** control in the header.
-- Locale is persisted in `data/config.json` (`locale` field) and `localStorage`.
+- Locale is persisted in `config.json` (`locale` field) and `localStorage`.
 
 ## Notes
 
-- Settings are stored in `data/config.json`.
+- Settings are stored under the XDG data directory (see above).
 - Bridge mode maps to MQTT `connection_mode=proxy` (on) or `direct` (off).
 - SSH is non-interactive and uses the host's existing OpenSSH keys/configuration. Host-key fingerprint verification and `known_hosts` updates are disabled so new or reflashed robots do not block automatic configuration.
