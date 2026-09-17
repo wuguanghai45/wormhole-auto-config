@@ -49,6 +49,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "lan.no_ip_on_iface": "网口 {iface} 尚无可用 IPv4",
         "lan.none": "未发现可用的 LAN IPv4",
         "api.ok": "正常",
+        "update.job_running": "自动配置任务运行中，无法升级",
+        "update.apply_ok": "已安装 {version}，服务即将重启",
     },
     "en": {
         "job.idle": "Idle",
@@ -91,6 +93,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "lan.no_ip_on_iface": "interface {iface} has no usable IPv4 yet",
         "lan.none": "no usable LAN IPv4 found",
         "api.ok": "ok",
+        "update.job_running": "Cannot upgrade while an auto-config job is running",
+        "update.apply_ok": "Installed {version}; service will restart shortly",
     },
 }
 

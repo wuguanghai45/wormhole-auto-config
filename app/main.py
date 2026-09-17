@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Optional
 
@@ -12,11 +13,25 @@ from fastapi.staticfiles import StaticFiles
 from app.auto_config import AutoConfigService, sse_event_stream
 from app.config import AppConfig, load_config, save_config
 from app.i18n import normalize_locale, t
-from app.models import ApiMessage, ConfigResponse, JobState, StartJobResponse
+from app.models import (
+    ApiMessage,
+    ConfigResponse,
+    JobState,
+    StartJobResponse,
+    UpdateApplyResponse,
+    UpdateCheckResponse,
+)
+from app.update import (
+    UpdateError,
+    apply_update,
+    check_for_update,
+    current_version,
+    schedule_process_restart,
+)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="Wormhole Auto-Config", version="1.0.0")
+app = FastAPI(title="Wormhole Auto-Config", version=current_version())
 service = AutoConfigService()
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -99,4 +114,51 @@ async def job_events() -> StreamingResponse:
 async def health() -> ApiMessage:
     """Liveness probe for smoke checks."""
     return ApiMessage(ok=True, message=t("en", "api.ok"))
+
+
+@app.get("/api/update/check", response_model=UpdateCheckResponse)
+async def update_check() -> UpdateCheckResponse:
+    """Compare the installed version against the latest GitHub Release."""
+    try:
+        info = await check_for_update()
+    except UpdateError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return UpdateCheckResponse(
+        current_version=info.current_version,
+        latest_version=info.latest_version,
+        update_available=info.update_available,
+        release_notes=info.release_notes,
+        asset_name=info.asset_name,
+        html_url=info.html_url,
+    )
+
+
+@app.post("/api/update/apply", response_model=UpdateApplyResponse)
+async def update_apply() -> UpdateApplyResponse:
+    """Download the latest wheel, install it, and schedule a process restart."""
+    cfg = load_config()
+    locale = normalize_locale(cfg.locale)
+    if service.is_running():
+        raise HTTPException(
+            status_code=409,
+            detail=t(locale, "update.job_running"),
+        )
+    try:
+        info = await apply_update()
+    except UpdateError as exc:
+        message = str(exc)
+        status = 400 if "already up to date" in message else 502
+        raise HTTPException(status_code=status, detail=message) from exc
+
+    asyncio.create_task(schedule_restart_after_response())
+    return UpdateApplyResponse(
+        ok=True,
+        message=t(locale, "update.apply_ok", version=info.latest_version),
+        target_version=info.latest_version,
+    )
+
+
+async def schedule_restart_after_response() -> None:
+    """Delay briefly so the apply response can flush, then exit the process."""
+    await schedule_process_restart(1.0)
 

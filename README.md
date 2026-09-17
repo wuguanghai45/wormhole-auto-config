@@ -9,6 +9,7 @@ Local operator tool that waits for a LAN link to the Wormhole device, clears sta
 - Monitors host LAN for IPv4, then talks to `http://192.168.40.1` CGI endpoints
 - Before each WiFi update, uses SSH to delete `wireless.wifinet0`, `wireless.wifinet1`, and `wireless.wifinet2`
 - Verifies success when `get-network-status` reports `wifi.ip0` or `wifi.ip1`
+- In-app update check against GitHub Releases (download wheel and restart)
 
 ## Requirements
 
@@ -75,6 +76,32 @@ python -m build
 # artifacts under dist/*.whl
 ```
 
+### Release (CI/CD)
+
+1. Bump `version` in `pyproject.toml` (for example `1.2.3`).
+2. Commit the change.
+3. Tag and push:
+
+```bash
+git tag v1.2.3
+git push origin main --tags
+```
+
+GitHub Actions (`.github/workflows/release.yml`) builds the wheel on `main`/PRs, and on `v*` tags publishes a GitHub Release with the `.whl` asset. The tag (without `v`) must match `pyproject.toml`.
+
+### Online upgrade (Web UI)
+
+After the service is installed from a wheel (`pip install` / Release asset), open the UI header:
+
+1. Current version is shown automatically (and on **Check for updates**).
+2. If a newer GitHub Release wheel exists, click **Upgrade to vX.Y.Z**.
+3. The service downloads the wheel, runs `pip install --upgrade`, then restarts (LaunchAgent KeepAlive / systemd `Restart=always`).
+
+Notes:
+
+- Prefer an installed package environment; a loose uninstalled checkout may report `0.0.0` and cannot self-upgrade cleanly.
+- Optional: `WORMHOLE_UPDATE_REPO=owner/repo`, `WORMHOLE_GITHUB_TOKEN` or `GITHUB_TOKEN` for private repos / higher API limits.
+
 ### Manual setup
 
 ```bash
@@ -117,6 +144,8 @@ A one-time migration copies an old checkout `data/config.json` into the XDG path
 | GET | `/api/jobs/current` | Current job snapshot |
 | GET | `/api/jobs/events` | SSE job progress stream |
 | GET | `/api/health` | Liveness |
+| GET | `/api/update/check` | Compare installed version to latest GitHub Release |
+| POST | `/api/update/apply` | Download latest wheel, install, restart service |
 
 ## Device CGI used
 

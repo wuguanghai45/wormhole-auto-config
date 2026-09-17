@@ -83,3 +83,22 @@ class ConfigResponse(BaseModel):
     """Wrapper for GET/PUT config responses."""
 
     config: AppConfig
+
+
+class UpdateCheckResponse(BaseModel):
+    """Payload returned by GET /api/update/check."""
+
+    current_version: str
+    latest_version: str
+    update_available: bool
+    release_notes: str = ""
+    asset_name: str = ""
+    html_url: str = ""
+
+
+class UpdateApplyResponse(BaseModel):
+    """Payload returned by POST /api/update/apply."""
+
+    ok: bool
+    message: str
+    target_version: str

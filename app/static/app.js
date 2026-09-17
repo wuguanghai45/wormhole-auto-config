@@ -1,6 +1,6 @@
 /**
  * @file app.js
- * @brief Operator UI for Wormhole auto-config: form, SSE progress, i18n.
+ * @brief Operator UI for Wormhole auto-config: form, SSE progress, i18n, updates.
  */
 
 const ACTIVE_PHASES = new Set([
@@ -10,6 +10,9 @@ const ACTIVE_PHASES = new Set([
   "applying_bridge",
   "verifying_wifi",
 ]);
+
+/** @type {{ current_version: string, latest_version: string, update_available: boolean } | null} */
+let lastUpdateInfo = null;
 
 const fields = [
   "ssid",
@@ -135,6 +138,140 @@ function renderState(state) {
 }
 
 /**
+ * @brief Render version label and optional upgrade button from update check data.
+ * @param {object|null} info Update check payload
+ */
+function renderUpdateInfo(info) {
+  lastUpdateInfo = info;
+  const versionEl = document.getElementById("current-version");
+  const applyBtn = document.getElementById("apply-update-btn");
+  const statusEl = document.getElementById("update-status");
+
+  if (!info || !info.current_version) {
+    versionEl.textContent = "";
+    applyBtn.classList.add("hidden");
+    return;
+  }
+
+  versionEl.textContent = window.I18n.t("currentVersion", {
+    version: info.current_version,
+  });
+
+  if (info.update_available) {
+    applyBtn.classList.remove("hidden");
+    applyBtn.textContent = window.I18n.t("upgradeTo", {
+      version: info.latest_version,
+    });
+    applyBtn.disabled = false;
+    statusEl.textContent = window.I18n.t("updateAvailable", {
+      version: info.latest_version,
+    });
+  } else {
+    applyBtn.classList.add("hidden");
+    statusEl.textContent = window.I18n.t("updateLatest");
+  }
+}
+
+/**
+ * @brief Refresh i18n-dependent update labels after a locale switch.
+ */
+function refreshUpdateLabels() {
+  if (lastUpdateInfo) {
+    renderUpdateInfo(lastUpdateInfo);
+  }
+  const checkBtn = document.getElementById("check-update-btn");
+  if (checkBtn && !checkBtn.disabled) {
+    checkBtn.textContent = window.I18n.t("checkUpdate");
+  }
+}
+
+/**
+ * @brief Call GET /api/update/check and update the header controls.
+ */
+async function checkForUpdate() {
+  const statusEl = document.getElementById("update-status");
+  const checkBtn = document.getElementById("check-update-btn");
+  const applyBtn = document.getElementById("apply-update-btn");
+  statusEl.textContent = window.I18n.t("updateChecking");
+  checkBtn.disabled = true;
+  applyBtn.classList.add("hidden");
+  try {
+    const response = await fetch("/api/update/check");
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.detail || body.message || `HTTP ${response.status}`);
+    }
+    renderUpdateInfo(body);
+  } catch (err) {
+    statusEl.textContent = window.I18n.t("updateCheckFailed", {
+      error: err.message,
+    });
+  } finally {
+    checkBtn.disabled = false;
+    checkBtn.textContent = window.I18n.t("checkUpdate");
+  }
+}
+
+/**
+ * @brief Poll /api/health until the service is back after restart.
+ * @param {number} [timeoutMs] Overall timeout
+ * @returns {Promise<void>}
+ */
+async function waitForHealth(timeoutMs = 60000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const response = await fetch("/api/health", { cache: "no-store" });
+      if (response.ok) {
+        return;
+      }
+    } catch (err) {
+      // Service is restarting.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error("timeout waiting for service restart");
+}
+
+/**
+ * @brief Download/install the latest wheel and wait for the process to come back.
+ */
+async function applyUpdate() {
+  if (!lastUpdateInfo || !lastUpdateInfo.update_available) {
+    return;
+  }
+  const statusEl = document.getElementById("update-status");
+  const checkBtn = document.getElementById("check-update-btn");
+  const applyBtn = document.getElementById("apply-update-btn");
+  const target = lastUpdateInfo.latest_version;
+  statusEl.textContent = window.I18n.t("updateApplying", { version: target });
+  checkBtn.disabled = true;
+  applyBtn.disabled = true;
+  document.getElementById("start-btn").disabled = true;
+  document.getElementById("stop-btn").disabled = true;
+  document.getElementById("save-btn").disabled = true;
+
+  try {
+    const response = await fetch("/api/update/apply", { method: "POST" });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.detail || body.message || `HTTP ${response.status}`);
+    }
+    statusEl.textContent = window.I18n.t("updateRestarting");
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await waitForHealth();
+    window.location.reload();
+  } catch (err) {
+    statusEl.textContent = window.I18n.t("updateApplyFailed", {
+      error: err.message,
+    });
+    checkBtn.disabled = false;
+    applyBtn.disabled = false;
+    document.getElementById("save-btn").disabled = false;
+  }
+}
+
+/**
  * @brief Persist current form values via PUT /api/config.
  */
 async function saveConfig() {
@@ -208,6 +345,7 @@ function connectEvents() {
 async function switchLocale(locale) {
   const resolved = window.I18n.normalizeUiLocale(locale);
   window.I18n.applyI18n(resolved);
+  refreshUpdateLabels();
   try {
     await saveConfig();
   } catch (err) {
@@ -227,11 +365,19 @@ async function init() {
   renderState(await jobRes.json());
 
   connectEvents();
+  await checkForUpdate();
 
   document.querySelectorAll(".lang-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       switchLocale(btn.getAttribute("data-locale"));
     });
+  });
+
+  document.getElementById("check-update-btn").addEventListener("click", () => {
+    checkForUpdate().catch((err) => console.error(err));
+  });
+  document.getElementById("apply-update-btn").addEventListener("click", () => {
+    applyUpdate().catch((err) => console.error(err));
   });
 
   document.getElementById("save-btn").addEventListener("click", async () => {

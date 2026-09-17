@@ -82,6 +82,10 @@ class AutoConfigService:
     def _running(self) -> bool:
         return self._task is not None and not self._task.done()
 
+    def is_running(self) -> bool:
+        """Return True when an auto-config job task is active."""
+        return self._running()
+
     async def start(self, config: Optional[AppConfig] = None) -> JobState:
         """Start a new auto-config job if none is running."""
         async with self._lock:

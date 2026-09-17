@@ -11,9 +11,17 @@
     <header class="header">
       <div class="header-top">
         <h1 data-i18n="appName">Wormhole 自动配置</h1>
-        <div class="lang-switch" role="group" aria-label="Language">
-          <button type="button" class="lang-btn" data-locale="zh-CN">中文</button>
-          <button type="button" class="lang-btn" data-locale="en">EN</button>
+        <div class="header-actions">
+          <div class="update-bar" id="update-bar">
+            <span id="current-version" class="version-label"></span>
+            <button type="button" id="check-update-btn" class="btn secondary btn-sm" data-i18n="checkUpdate">检查更新</button>
+            <button type="button" id="apply-update-btn" class="btn primary btn-sm hidden" data-i18n="upgradeTo">升级</button>
+            <span id="update-status" class="update-status" aria-live="polite"></span>
+          </div>
+          <div class="lang-switch" role="group" aria-label="Language">
+            <button type="button" class="lang-btn" data-locale="zh-CN">中文</button>
+            <button type="button" class="lang-btn" data-locale="en">EN</button>
+          </div>
         </div>
       </div>
       <p class="subtitle" data-i18n="subtitle">配置 WiFi 与 MQTT 桥接，并通过局域网自动下发</p>
