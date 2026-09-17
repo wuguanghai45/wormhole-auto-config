@@ -42,7 +42,7 @@ Then open [http://localhost:8080](http://localhost:8080).
 | Platform | Autostart mechanism |
 |----------|---------------------|
 | macOS | LaunchAgent `~/Library/LaunchAgents/com.wormhole.auto-config.plist` |
-| Linux | systemd user unit `~/.config/systemd/user/wormhole-auto-config.service` |
+| Linux | systemd user unit `~/.config/systemd/user/wormhole-auto-config.service`, plus `loginctl enable-linger` so it starts at boot without login |
 
 Optional environment / flag overrides:
 
@@ -135,7 +135,7 @@ wormhole-auto-config serve --host 0.0.0.0 --port 8080
 
 ## Run
 
-After `wormhole-auto-config install` (or `./scripts/install.sh`), the service starts automatically on login.
+After `wormhole-auto-config install` (or `./scripts/install.sh`), the service starts automatically on login. On Linux, install also enables systemd lingering so the user service comes up at boot on a headless machine (no SSH/console login required). If lingering cannot be enabled, run `loginctl enable-linger $USER` once.
 
 Manual foreground:
 

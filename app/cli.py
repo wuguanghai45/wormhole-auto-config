@@ -198,6 +198,46 @@ WantedBy=default.target
     return unit_path
 
 
+def _linux_linger_enabled(user: str) -> bool:
+    """Return True when systemd lingering is on for the given user."""
+    result = subprocess.run(
+        ["loginctl", "show-user", user, "--property=Linger"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0 and "Linger=yes" in result.stdout
+
+
+def _enable_linux_linger() -> None:
+    """
+    Enable systemd lingering so the user service starts at boot.
+
+    Without lingering, systemd --user (and this service) only start after an
+    interactive login, and they stop shortly after the last session ends.
+    """
+    user = getpass.getuser()
+    if _linux_linger_enabled(user):
+        _log(f"systemd lingering already enabled for {user}")
+        return
+    result = subprocess.run(
+        ["loginctl", "enable-linger", user],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 0 and _linux_linger_enabled(user):
+        _log(f"Enabled systemd lingering for {user} (boot without login)")
+        return
+    detail = (result.stderr or result.stdout or "").strip()
+    _log(
+        "WARNING: lingering is not enabled; the service will not start at boot "
+        f"until {user} logs in. Run: loginctl enable-linger {user}"
+    )
+    if detail:
+        _log(detail)
+
+
 def _install_linux(cli_path: Path, host: str, port: int) -> None:
     """Register and start the systemd user service."""
     unit_path = _write_linux_unit(cli_path, host, port)
@@ -208,16 +248,7 @@ def _install_linux(cli_path: Path, host: str, port: int) -> None:
     )
     _log(f"Linux systemd user service enabled ({SERVICE_NAME})")
     _log(f"Unit written: {unit_path}")
-    if subprocess.run(
-        ["systemctl", "--user", "show-environment"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    ).returncode != 0:
-        _log(
-            "Tip: enable lingering for boot without login: "
-            f"loginctl enable-linger {getpass.getuser()}"
-        )
+    _enable_linux_linger()
 
 
 def _uninstall_linux() -> None:
