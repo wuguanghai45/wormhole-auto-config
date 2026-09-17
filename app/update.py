@@ -1,4 +1,4 @@
-"""Online update helpers: GitHub Releases check, download, and install."""
+"""Online update helpers: MinIO versions.json check, download, and install."""
 
 from __future__ import annotations
 
@@ -10,14 +10,16 @@ import tempfile
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from packaging.version import InvalidVersion, Version
 
 PACKAGE_NAME = "wormhole-auto-config"
-DEFAULT_UPDATE_REPO = "wuguanghai45/wormhole-auto-config"
-GITHUB_API = "https://api.github.com"
+DEFAULT_MANIFEST_URL = (
+    "http://minio.hcrobots.com:9000/hc-release/wormhole-auto-config/versions.json"
+)
 FALLBACK_VERSION = "0.0.0"
 
 
@@ -27,7 +29,7 @@ class UpdateError(Exception):
 
 @dataclass(frozen=True)
 class UpdateInfo:
-    """Result of comparing the installed package to the latest GitHub Release."""
+    """Result of comparing the installed package to the latest MinIO release."""
 
     current_version: str
     latest_version: str
@@ -38,26 +40,10 @@ class UpdateInfo:
     html_url: str
 
 
-def resolve_update_repo() -> str:
-    """Return owner/repo for GitHub Releases (env override supported)."""
-    raw = os.environ.get("WORMHOLE_UPDATE_REPO", "").strip()
-    return raw or DEFAULT_UPDATE_REPO
-
-
-def _github_headers() -> dict[str, str]:
-    """Build GitHub API headers, including optional auth token."""
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": f"{PACKAGE_NAME}-updater",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    token = (
-        os.environ.get("WORMHOLE_GITHUB_TOKEN", "").strip()
-        or os.environ.get("GITHUB_TOKEN", "").strip()
-    )
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    return headers
+def resolve_manifest_url() -> str:
+    """Return the MinIO versions.json URL (env override supported)."""
+    raw = os.environ.get("WORMHOLE_UPDATE_MANIFEST_URL", "").strip()
+    return raw or DEFAULT_MANIFEST_URL
 
 
 def current_version() -> str:
@@ -84,65 +70,76 @@ def _parse_version(value: str) -> Version:
         raise UpdateError(f"invalid version: {value}") from exc
 
 
-def _pick_wheel_asset(assets: list[dict[str, Any]]) -> dict[str, Any]:
-    """Select the first release asset whose name ends with .whl."""
-    for asset in assets:
-        name = str(asset.get("name") or "")
-        if name.endswith(".whl"):
-            return asset
-    raise UpdateError("latest release has no .whl asset")
+def _pick_latest_entry(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return the first versions[] entry from a latest-only manifest."""
+    versions = payload.get("versions")
+    if not isinstance(versions, list) or not versions:
+        raise UpdateError("versions.json has no versions entries")
+    entry = versions[0]
+    if not isinstance(entry, dict):
+        raise UpdateError("versions.json entry is invalid")
+    return entry
 
 
 async def check_for_update(timeout_sec: float = 20.0) -> UpdateInfo:
     """
-    Query GitHub Releases for the latest wheel and compare to the installed version.
+    Query the MinIO versions.json manifest and compare to the installed version.
 
-    @param[in] timeout_sec HTTP timeout for the GitHub API request.
+    @param[in] timeout_sec HTTP timeout for the manifest request.
     @return Comparison result including download URL when a wheel exists.
-    @raises UpdateError When the API call fails or no wheel asset is present.
+    @raises UpdateError When the request fails or the manifest is invalid.
     """
-    repo = resolve_update_repo()
-    url = f"{GITHUB_API}/repos/{repo}/releases/latest"
+    url = resolve_manifest_url()
     installed = current_version()
 
     try:
         async with httpx.AsyncClient(
             timeout=timeout_sec,
-            headers=_github_headers(),
             follow_redirects=True,
+            headers={"User-Agent": f"{PACKAGE_NAME}-updater"},
         ) as client:
             response = await client.get(url)
     except httpx.HTTPError as exc:
-        raise UpdateError(f"failed to reach GitHub Releases: {exc}") from exc
+        raise UpdateError(f"failed to reach update manifest: {exc}") from exc
 
     if response.status_code == 404:
-        raise UpdateError("no GitHub Release found")
+        raise UpdateError("no update manifest found")
     if response.status_code >= 400:
         raise UpdateError(
-            f"GitHub API error HTTP {response.status_code}: {response.text[:200]}"
+            f"manifest HTTP {response.status_code}: {response.text[:200]}"
         )
 
-    payload = response.json()
-    tag = str(payload.get("tag_name") or "")
-    latest = tag[1:] if tag.lower().startswith("v") else tag
-    if not latest:
-        raise UpdateError("latest release has an empty tag_name")
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise UpdateError("update manifest is not valid JSON") from exc
 
-    asset = _pick_wheel_asset(list(payload.get("assets") or []))
-    asset_name = str(asset.get("name") or "")
-    asset_url = str(asset.get("browser_download_url") or "")
+    if not isinstance(payload, dict):
+        raise UpdateError("update manifest root must be an object")
+
+    entry = _pick_latest_entry(payload)
+    latest_raw = str(entry.get("version") or "").strip()
+    if not latest_raw:
+        raise UpdateError("manifest entry has an empty version")
+    latest = latest_raw[1:] if latest_raw.lower().startswith("v") else latest_raw
+
+    asset_url = str(entry.get("download_url") or "").strip()
     if not asset_url:
-        raise UpdateError("wheel asset has no download URL")
+        raise UpdateError("manifest entry has no download_url")
+
+    asset_name = Path(urlparse(asset_url).path).name
+    if not asset_name.endswith(".whl"):
+        asset_name = f"{PACKAGE_NAME.replace('-', '_')}-{latest}-py3-none-any.whl"
 
     update_available = _parse_version(latest) > _parse_version(installed)
     return UpdateInfo(
         current_version=installed,
         latest_version=latest,
         update_available=update_available,
-        release_notes=str(payload.get("body") or ""),
+        release_notes=str(entry.get("notes") or ""),
         asset_name=asset_name,
         asset_url=asset_url,
-        html_url=str(payload.get("html_url") or ""),
+        html_url=asset_url,
     )
 
 
@@ -169,17 +166,17 @@ def _install_wheel(wheel_path: Path) -> None:
 
 async def download_and_install(asset_url: str, timeout_sec: float = 120.0) -> None:
     """
-    Download a wheel from GitHub and install it with pip.
+    Download a wheel from MinIO and install it with pip.
 
-    @param[in] asset_url Browser download URL for the release wheel.
+    @param[in] asset_url Download URL for the release wheel.
     @param[in] timeout_sec HTTP timeout for the download.
     @raises UpdateError When download or pip install fails.
     """
     try:
         async with httpx.AsyncClient(
             timeout=timeout_sec,
-            headers=_github_headers(),
             follow_redirects=True,
+            headers={"User-Agent": f"{PACKAGE_NAME}-updater"},
         ) as client:
             response = await client.get(asset_url)
     except httpx.HTTPError as exc:
@@ -188,7 +185,7 @@ async def download_and_install(asset_url: str, timeout_sec: float = 120.0) -> No
     if response.status_code >= 400:
         raise UpdateError(f"wheel download failed HTTP {response.status_code}")
 
-    suffix = Path(asset_url).name
+    suffix = Path(urlparse(asset_url).path).name
     if not suffix.endswith(".whl"):
         suffix = "update.whl"
 

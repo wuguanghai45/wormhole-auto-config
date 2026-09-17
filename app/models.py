@@ -86,7 +86,7 @@ class ConfigResponse(BaseModel):
 
 
 class UpdateCheckResponse(BaseModel):
-    """Payload returned by GET /api/update/check."""
+    """Payload returned by GET /api/update/check (MinIO versions.json)."""
 
     current_version: str
     latest_version: str

@@ -118,7 +118,7 @@ async def health() -> ApiMessage:
 
 @app.get("/api/update/check", response_model=UpdateCheckResponse)
 async def update_check() -> UpdateCheckResponse:
-    """Compare the installed version against the latest GitHub Release."""
+    """Compare the installed version against the latest MinIO versions.json entry."""
     try:
         info = await check_for_update()
     except UpdateError as exc:

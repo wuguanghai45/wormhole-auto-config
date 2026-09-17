@@ -9,7 +9,7 @@ Local operator tool that waits for a LAN link to the Wormhole device, clears sta
 - Monitors host LAN for IPv4, then talks to `http://192.168.40.1` CGI endpoints
 - Before each WiFi update, uses SSH to delete `wireless.wifinet0`, `wireless.wifinet1`, and `wireless.wifinet2`
 - Verifies success when `get-network-status` reports `wifi.ip0` or `wifi.ip1`
-- In-app update check against GitHub Releases (download wheel and restart)
+- In-app update check against MinIO `versions.json` (download wheel and restart)
 
 ## Requirements
 
@@ -87,20 +87,41 @@ git tag v1.2.3
 git push origin main --tags
 ```
 
-GitHub Actions (`.github/workflows/release.yml`) builds the wheel on `main`/PRs, and on `v*` tags publishes a GitHub Release with the `.whl` asset. The tag (without `v`) must match `pyproject.toml`.
+GitHub Actions (`.github/workflows/release.yml`) builds the wheel on `main`/PRs, and on `v*` tags:
+
+1. Publishes a GitHub Release with the `.whl` asset (backup channel).
+2. Uploads the wheel and a **latest-only** `versions.json` to MinIO.
+
+The tag (without `v`) must match `pyproject.toml`.
+
+Required GitHub repository secrets:
+
+| Secret | Purpose |
+|--------|---------|
+| `MINIO_ACCESS_KEY` | MinIO access key |
+| `MINIO_SECRET_KEY` | MinIO secret key |
+
+Artifact locations:
+
+| Kind | URL |
+|------|-----|
+| Version manifest | `http://minio.hcrobots.com:9000/hc-release/wormhole-auto-config/versions.json` |
+| Wheel | `http://minio.hcrobots.com:9000/hc-release/wormhole-auto-config/<tag>/*.whl` |
+
+`versions.json` always contains a single entry for the newest release (history is not merged). CI runners and operator machines must be able to reach `minio.hcrobots.com:9000`.
 
 ### Online upgrade (Web UI)
 
 After the service is installed from a wheel (`pip install` / Release asset), open the UI header:
 
 1. Current version is shown automatically (and on **Check for updates**).
-2. If a newer GitHub Release wheel exists, click **Upgrade to vX.Y.Z**.
-3. The service downloads the wheel, runs `pip install --upgrade`, then restarts (LaunchAgent KeepAlive / systemd `Restart=always`).
+2. If a newer version is listed in MinIO `versions.json`, click **Upgrade to vX.Y.Z**.
+3. The service downloads that wheel, runs `pip install --upgrade`, then restarts (LaunchAgent KeepAlive / systemd `Restart=always`).
 
 Notes:
 
 - Prefer an installed package environment; a loose uninstalled checkout may report `0.0.0` and cannot self-upgrade cleanly.
-- Optional: `WORMHOLE_UPDATE_REPO=owner/repo`, `WORMHOLE_GITHUB_TOKEN` or `GITHUB_TOKEN` for private repos / higher API limits.
+- Optional: `WORMHOLE_UPDATE_MANIFEST_URL` to override the default MinIO `versions.json` URL.
 
 ### Manual setup
 
@@ -144,8 +165,8 @@ A one-time migration copies an old checkout `data/config.json` into the XDG path
 | GET | `/api/jobs/current` | Current job snapshot |
 | GET | `/api/jobs/events` | SSE job progress stream |
 | GET | `/api/health` | Liveness |
-| GET | `/api/update/check` | Compare installed version to latest GitHub Release |
-| POST | `/api/update/apply` | Download latest wheel, install, restart service |
+| GET | `/api/update/check` | Compare installed version to MinIO `versions.json` |
+| POST | `/api/update/apply` | Download latest MinIO wheel, install, restart service |
 
 ## Device CGI used
 
