@@ -82,7 +82,7 @@ class AppConfig(BaseModel):
     @field_validator("mqtt_port", mode="before")
     @classmethod
     def _coerce_mqtt_port(cls, value: Any) -> str:
-        """Store MQTT port as a string for the legacy CGI contract."""
+        """Store MQTT port as a string for local persistence and form binding."""
         if value is None:
             return "1883"
         return str(value).strip() or "1883"

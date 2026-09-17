@@ -147,6 +147,13 @@ body {
   color: var(--text) !important;
 }
 
+.field-hint {
+  margin: -0.35rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 .form {
   display: grid;
   gap: 0.9rem;

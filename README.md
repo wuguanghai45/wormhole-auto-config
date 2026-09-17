@@ -4,7 +4,7 @@ Local operator tool that waits for a LAN link to the Wormhole device, clears sta
 
 ## Features
 
-- Web UI to set WiFi SSID / password and MQTT bridge mode (`proxy` / `direct`)
+- Web UI to set WiFi SSID / password and MQTT broker (agent + all bridge links, `proxy` / `direct`)
 - One-click auto-config job with live progress (SSE)
 - Monitors host LAN for IPv4, then talks to `http://192.168.40.1` CGI endpoints
 - Before each WiFi update, uses SSH to delete `wireless.wifinet0`, `wireless.wifinet1`, and `wireless.wifinet2`
@@ -171,9 +171,12 @@ A one-time migration copies an old checkout `data/config.json` into the XDG path
 ## Device CGI used
 
 - `POST /cgi-bin/save-wifi-config` — `{"ssid","password"}`
-- `GET /cgi-bin/get-services-info` — read MQTT links / `connection_mode`
-- `POST /cgi-bin/save-mqtt-config` — rewrite links with desired `connection_mode`
+- `GET /cgi-bin/get-services-info` — read MQTT agent / bridge links and `connection_mode`
+- `POST /cgi-bin/save-agent-mqtt-config` — write wormhole-agent MQTT endpoint
+- `POST /cgi-bin/save-mqtt-bridge-config` — write the same broker to every bridge link (`4g` / `wifi0` / `wifi1`) with desired `connection_mode`
 - `GET /cgi-bin/get-network-status` — WiFi STA IP check
+
+MQTT auto-config always applies one operator-provided broker to **agent and all bridge links**. Link names are discovered via `get-services-info`; if that fails, firmware defaults `4g`, `wifi0`, `wifi1` are used.
 
 Before `save-wifi-config`, the service runs the following on the same device IP over SSH:
 
@@ -193,5 +196,5 @@ uci commit wireless
 ## Notes
 
 - Settings are stored under the XDG data directory (see above).
-- Bridge mode maps to MQTT `connection_mode=proxy` (on) or `direct` (off).
+- Bridge mode maps to MQTT `connection_mode=proxy` (on) or `direct` (off). In both cases the same broker host/port/credentials are written to every Mosquitto bridge link.
 - SSH is non-interactive and uses the host's existing OpenSSH keys/configuration. Host-key fingerprint verification and `known_hosts` updates are disabled so new or reflashed robots do not block automatic configuration.

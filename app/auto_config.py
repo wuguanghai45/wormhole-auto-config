@@ -8,7 +8,7 @@ import time
 from typing import Any, AsyncIterator, Optional
 
 from app.config import AppConfig, load_config
-from app.device_cgi import DeviceCgiClient, DeviceCgiError
+from app.device_cgi import DEFAULT_BRIDGE_LINK_NAMES, DeviceCgiClient, DeviceCgiError
 from app.device_ssh import DeviceSshClient
 from app.i18n import normalize_locale, t
 from app.lan_monitor import find_lan_address, format_lan_snapshot
@@ -282,7 +282,7 @@ class AutoConfigService:
         client: DeviceCgiClient,
         config: AppConfig,
     ) -> None:
-        """Save MQTT via legacy CGI using operator-provided broker settings."""
+        """Write one broker to wormhole-agent and every Mosquitto bridge link."""
         desired_mode = "proxy" if config.bridge_mode else "direct"
         host = config.mqtt_host.strip()
         port = str(config.mqtt_port).strip()
@@ -291,19 +291,46 @@ class AutoConfigService:
 
         self._set_phase(
             JobPhase.APPLYING_BRIDGE,
+            "job.reading_mqtt",
+            mode=desired_mode,
+        )
+        link_names: list[str] = []
+        try:
+            services = await client.get_services_info()
+            link_names = client.extract_bridge_link_names(services)
+        except DeviceCgiError as exc:
+            link_names = list(DEFAULT_BRIDGE_LINK_NAMES)
+            self._log("job.mqtt_links_fallback", error=str(exc))
+
+        if not link_names:
+            link_names = list(DEFAULT_BRIDGE_LINK_NAMES)
+            self._log("job.mqtt_links_fallback", error="empty link list")
+
+        links_label = ", ".join(link_names)
+        self._set_phase(
+            JobPhase.APPLYING_BRIDGE,
             "job.setting_mqtt",
             mode=desired_mode,
             host=host,
             port=port,
+            links=links_label,
         )
-        await client.save_mqtt(
+        result = await client.save_mqtt(
             host=host,
             port=port,
             username=config.mqtt_username,
             password=config.mqtt_password,
             connection_mode=desired_mode,
+            link_names=link_names,
         )
-        self._log("job.mqtt_set", mode=desired_mode, host=host, port=port)
+        applied_links = result.get("link_names") or link_names
+        self._log(
+            "job.mqtt_set",
+            mode=desired_mode,
+            host=host,
+            port=port,
+            links=", ".join(applied_links),
+        )
 
     async def _verify_wifi(self, client: DeviceCgiClient, config: AppConfig) -> None:
         self._set_phase(JobPhase.VERIFYING_WIFI, "job.verifying_wifi")
